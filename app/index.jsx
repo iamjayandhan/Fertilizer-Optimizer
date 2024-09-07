@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, Button, StyleSheet, Modal, TouchableOpacity, Linking, Platform, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, Button, StyleSheet, Modal, TouchableOpacity, Platform, Alert } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Location from 'expo-location';
 import { Picker } from '@react-native-picker/picker';
@@ -7,16 +7,62 @@ import { Picker } from '@react-native-picker/picker';
 const App = () => {
   const [soilReport, setSoilReport] = useState(null);
   const [cropType, setCropType] = useState('');
-  const [location, setLocation] = useState(null);
+  const [locationData, setLocationData] = useState('Fetching location...');
+  const [errorMsg, setErrorMsg] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
+
+  useEffect(() => {
+    getLocation();
+  }, []);
+
+  const getLocation = async () => {
+    try {
+      if (Platform.OS === 'web') {
+        // Use web-specific geolocation API
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              const { latitude, longitude } = position.coords;
+              const data = `Latitude: ${latitude}, Longitude: ${longitude}`;
+              console.log('Web Location Data:', data); // Debugging statement
+              setLocationData(data);
+            },
+            (error) => {
+              console.error('Geolocation error:', error.message);
+              setErrorMsg(error.message);
+              setLocationData('Error fetching location');
+            }
+          );
+        } else {
+          console.error('Geolocation is not supported by this browser.');
+          setErrorMsg('Geolocation is not supported by this browser.');
+          setLocationData('Geolocation not supported');
+        }
+      } else {
+        // Use mobile-specific geolocation API
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Denied', 'Permission to access location was denied');
+          setLocationData('Location permission denied');
+          return;
+        }
+        const { coords } = await Location.getCurrentPositionAsync({});
+        const data = `Latitude: ${coords.latitude}, Longitude: ${coords.longitude}`;
+        console.log('Mobile Location Data:', data); // Debugging statement
+        setLocationData(data);
+      }
+    } catch (error) {
+      console.error('Error getting location:', error);
+      setErrorMsg('Error getting location');
+      setLocationData('Error fetching location');
+    }
+  };
 
   const uploadFileOnPressHandler = async () => {
     try {
       const pickedFile = await DocumentPicker.getDocumentAsync({
         type: '*/*',
       });
-
-      console.log('Picked File:', pickedFile);
 
       if (pickedFile.type === 'cancel') {
         console.log('User cancelled the file picker');
@@ -32,29 +78,11 @@ const App = () => {
           type: file.mimeType,
         });
       } else {
-        // Handle the case where no file is picked
         Alert.alert('Error', 'No file was picked');
       }
     } catch (err) {
       console.error('Error picking file:', err);
       Alert.alert('Error', 'Error picking file');
-    }
-  };
-
-  // Function to request location access
-  const getLocation = async () => {
-    try {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        alert('Permission to access location was denied');
-        return;
-      }
-
-      let location = await Location.getCurrentPositionAsync({});
-      setLocation(location);
-    } catch (error) {
-      console.error('Error getting location:', error);
-      Alert.alert('Error', 'Error getting location');
     }
   };
 
@@ -70,15 +98,15 @@ const App = () => {
     if (soilReport && soilReport.uri) {
       await Linking.openURL(soilReport.uri); // Handle file URI for web
     } else {
-      alert('No file available to open');
+      Alert.alert('Error', 'No file available to open');
     }
   };
 
-  // Function to clear all data
   const clearData = () => {
     setSoilReport(null);
     setCropType('');
-    setLocation(null);
+    setLocationData('Fetching location...');
+    setErrorMsg(null);
   };
 
   return (
@@ -93,8 +121,7 @@ const App = () => {
             Selected file: {soilReport.name}
             {Platform.OS === 'web' && soilReport.uri && (
               <Text style={styles.infoText}>
-                {' '}
-                (<a href={soilReport.uri} download={soilReport.name} style={styles.link}>Download</a>)
+                {' '}<a href={soilReport.uri} download={soilReport.name} style={styles.link}>Download</a>
               </Text>
             )}
           </Text>
@@ -124,14 +151,9 @@ const App = () => {
 
       {/* Location Access */}
       <Button title="Get Location" onPress={getLocation} />
-      {location && (
-        <View style={styles.infoContainer}>
-          <Text style={styles.infoText}>Location: {location.coords.latitude}, {location.coords.longitude}</Text>
-          <Button
-            title="View on Map"
-            onPress={() => Linking.openURL(`https://www.google.com/maps?q=${location.coords.latitude},${location.coords.longitude}`)}
-          />
-        </View>
+      <Text style={styles.infoText}>{locationData}</Text>
+      {errorMsg && (
+        <Text style={styles.infoText}>{errorMsg}</Text>
       )}
 
       {/* Get Details Button */}
@@ -157,16 +179,12 @@ const App = () => {
               Selected file: {soilReport ? soilReport.name : 'No file selected'}
               {Platform.OS === 'web' && soilReport && soilReport.uri && (
                 <Text style={styles.infoText}>
-                  {' '}
-                  (<a href={soilReport.uri} download={soilReport.name} style={styles.link}>Download</a>)
+                  {' '}<a href={soilReport.uri} download={soilReport.name} style={styles.link}>Download</a>
                 </Text>
               )}
             </Text>
             <Text style={styles.infoText}>Crop Type: {cropType || 'Not selected'}</Text>
-            {location && <Text style={styles.infoText}>Location: {location.coords.latitude}, {location.coords.longitude}</Text>}
-            {soilReport && (
-              <Button title="Open File" onPress={openFile} />
-            )}
+            <Text style={styles.infoText}>Location Data: {locationData}</Text>
             <Button title="Close" onPress={hideDetails} />
           </View>
         </View>
@@ -203,9 +221,6 @@ const styles = StyleSheet.create({
   fileContainer: {
     marginVertical: 10,
   },
-  infoContainer: {
-    marginVertical: 10,
-  },
   modalBackground: {
     flex: 1,
     justifyContent: 'center',
@@ -228,15 +243,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     right: 10,
+    padding: 10,
   },
   closeButtonText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: 'red',
   },
   link: {
     color: 'blue',
-    textDecorationLine: 'underline',
   },
 });
 
