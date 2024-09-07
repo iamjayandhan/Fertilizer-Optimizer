@@ -1,15 +1,36 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Button, StyleSheet, Modal, TouchableOpacity, Platform, Alert } from 'react-native';
+import { View, Text, Button, StyleSheet, Modal, TouchableOpacity, Platform, Alert, Linking } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Location from 'expo-location';
 import { Picker } from '@react-native-picker/picker';
+import Animated, { Easing, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 
 const App = () => {
   const [soilReport, setSoilReport] = useState(null);
   const [cropType, setCropType] = useState('');
-  const [locationData, setLocationData] = useState('Fetching location...');
+  const [locationData, setLocationData] = useState('');
   const [errorMsg, setErrorMsg] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
+
+  const translateY = useSharedValue(1000); // Start from below the screen
+
+  useEffect(() => {
+    if (modalVisible) {
+      translateY.value = withSpring(0, {
+        damping: 10,
+        stiffness: 100,
+        overshootClamping: true,
+        easing: Easing.inOut(Easing.ease),
+      });
+    } else {
+      translateY.value = withSpring(1000, {
+        damping: 10,
+        stiffness: 100,
+        overshootClamping: true,
+        easing: Easing.inOut(Easing.ease),
+      });
+    }
+  }, [modalVisible]);
 
   useEffect(() => {
     getLocation();
@@ -18,28 +39,23 @@ const App = () => {
   const getLocation = async () => {
     try {
       if (Platform.OS === 'web') {
-        // Use web-specific geolocation API
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(
             (position) => {
               const { latitude, longitude } = position.coords;
-              const data = `Latitude: ${latitude}, Longitude: ${longitude}`;
-              console.log('Web Location Data:', data); // Debugging statement
-              setLocationData(data);
+              const googleMapLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
+              setLocationData(googleMapLink);
             },
             (error) => {
-              console.error('Geolocation error:', error.message);
               setErrorMsg(error.message);
               setLocationData('Error fetching location');
             }
           );
         } else {
-          console.error('Geolocation is not supported by this browser.');
           setErrorMsg('Geolocation is not supported by this browser.');
           setLocationData('Geolocation not supported');
         }
       } else {
-        // Use mobile-specific geolocation API
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
           Alert.alert('Permission Denied', 'Permission to access location was denied');
@@ -47,12 +63,10 @@ const App = () => {
           return;
         }
         const { coords } = await Location.getCurrentPositionAsync({});
-        const data = `Latitude: ${coords.latitude}, Longitude: ${coords.longitude}`;
-        console.log('Mobile Location Data:', data); // Debugging statement
-        setLocationData(data);
+        const googleMapLink = `https://www.google.com/maps?q=${coords.latitude},${coords.longitude}`;
+        setLocationData(googleMapLink);
       }
     } catch (error) {
-      console.error('Error getting location:', error);
       setErrorMsg('Error getting location');
       setLocationData('Error fetching location');
     }
@@ -70,8 +84,7 @@ const App = () => {
       }
 
       if (pickedFile.assets && pickedFile.assets.length > 0) {
-        const file = pickedFile.assets[0]; // Access the first file in assets array
-
+        const file = pickedFile.assets[0];
         setSoilReport({
           uri: file.uri,
           name: file.name,
@@ -81,7 +94,6 @@ const App = () => {
         Alert.alert('Error', 'No file was picked');
       }
     } catch (err) {
-      console.error('Error picking file:', err);
       Alert.alert('Error', 'Error picking file');
     }
   };
@@ -96,7 +108,7 @@ const App = () => {
 
   const openFile = async () => {
     if (soilReport && soilReport.uri) {
-      await Linking.openURL(soilReport.uri); // Handle file URI for web
+      await Linking.openURL(soilReport.uri);
     } else {
       Alert.alert('Error', 'No file available to open');
     }
@@ -105,71 +117,85 @@ const App = () => {
   const clearData = () => {
     setSoilReport(null);
     setCropType('');
-    setLocationData('Fetching location...');
+    setLocationData('');
     setErrorMsg(null);
   };
+
+  const animatedModalStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateY: translateY.value }],
+    };
+  });
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Fertilizer Suggestion</Text>
 
-      {/* Soil Report File Picker */}
-      <Button title="Pick Soil Report" onPress={uploadFileOnPressHandler} />
-      {soilReport && (
-        <View style={styles.fileContainer}>
-          <Text style={styles.infoText}>
-            Selected file: {soilReport.name}
-            {Platform.OS === 'web' && soilReport.uri && (
-              <Text style={styles.infoText}>
-                {' '}<a href={soilReport.uri} download={soilReport.name} style={styles.link}>Download</a>
-              </Text>
-            )}
-          </Text>
-          <Button title="Remove File" onPress={() => setSoilReport(null)} />
-        </View>
-      )}
+      {/* Input 1: Soil Report File Picker */}
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>1. Soil Report</Text>
+        <Button title="Pick Soil Report" onPress={uploadFileOnPressHandler} style={styles.button} />
+        {soilReport && (
+          <View style={styles.fileContainer}>
+            <Text style={styles.infoText}>
+              Selected file: {soilReport.name}
+              {Platform.OS === 'web' && soilReport.uri && (
+                <Text style={styles.infoText}>
+                  {' '}<a href={soilReport.uri} download={soilReport.name} style={styles.link}>Download</a>
+                </Text>
+              )}
+            </Text>
+            <Button title="Remove File" onPress={() => setSoilReport(null)} style={styles.button} />
+          </View>
+        )}
+      </View>
 
-      {/* Crop Type Dropdown */}
-      <Text style={styles.label}>Select Crop Type:</Text>
-      <Picker
-        selectedValue={cropType}
-        style={styles.picker}
-        onValueChange={(itemValue) => setCropType(itemValue)}
-      >
-        <Picker.Item label="Maize" value="Maize" />
-        <Picker.Item label="Sugarcane" value="Sugarcane" />
-        <Picker.Item label="Cotton" value="Cotton" />
-        <Picker.Item label="Tobacco" value="Tobacco" />
-        <Picker.Item label="Paddy" value="Paddy" />
-        <Picker.Item label="Barley" value="Barley" />
-        <Picker.Item label="Wheat" value="Wheat" />
-        <Picker.Item label="Millets" value="Millets" />
-        <Picker.Item label="Oil seeds" value="Oil seeds" />
-        <Picker.Item label="Pulses" value="Pulses" />
-        <Picker.Item label="Ground Nuts" value="Ground Nuts" />
-      </Picker>
+      {/* Input 2: Crop Type Dropdown */}
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>2. Crop Type</Text>
+        <Picker
+          selectedValue={cropType}
+          style={styles.picker}
+          onValueChange={(itemValue) => setCropType(itemValue)}
+        >
+          <Picker.Item label="Maize" value="Maize" />
+          <Picker.Item label="Sugarcane" value="Sugarcane" />
+          <Picker.Item label="Cotton" value="Cotton" />
+          <Picker.Item label="Tobacco" value="Tobacco" />
+          <Picker.Item label="Paddy" value="Paddy" />
+          <Picker.Item label="Barley" value="Barley" />
+          <Picker.Item label="Wheat" value="Wheat" />
+          <Picker.Item label="Millets" value="Millets" />
+          <Picker.Item label="Oil seeds" value="Oil seeds" />
+          <Picker.Item label="Pulses" value="Pulses" />
+          <Picker.Item label="Ground Nuts" value="Ground Nuts" />
+        </Picker>
+      </View>
 
-      {/* Location Access */}
-      <Button title="Get Location" onPress={getLocation} />
-      <Text style={styles.infoText}>{locationData}</Text>
-      {errorMsg && (
-        <Text style={styles.infoText}>{errorMsg}</Text>
-      )}
+      {/* Input 3: Location Access */}
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>3. Location</Text>
+        <Button title="Get Location" onPress={getLocation} style={styles.button} />
+        <Text style={styles.infoText}><a href={locationData} target="_blank" rel="noopener noreferrer">{locationData}</a></Text>
+        {errorMsg && (
+          <Text style={styles.infoText}>{errorMsg}</Text>
+        )}
+      </View>
 
       {/* Get Details Button */}
-      <Button title="Get Details" onPress={showDetails} />
+      <Button title="Get Details" onPress={showDetails} style={styles.button} />
 
       {/* Clear Button */}
-      <Button title="Clear" onPress={clearData} />
+      <Button title="Clear" onPress={clearData}/>
 
       {/* Modal for displaying details */}
       <Modal
         visible={modalVisible}
         transparent={true}
-        animationType="slide"
+        animationType="none" // Disable default animation
         onRequestClose={hideDetails}
       >
-        <View style={styles.modalBackground}>
+        <Animated.View style={[styles.modalBackground, animatedModalStyle]}>
           <View style={styles.modalContainer}>
             <TouchableOpacity style={styles.closeButton} onPress={hideDetails}>
               <Text style={styles.closeButtonText}>X</Text>
@@ -179,15 +205,21 @@ const App = () => {
               Selected file: {soilReport ? soilReport.name : 'No file selected'}
               {Platform.OS === 'web' && soilReport && soilReport.uri && (
                 <Text style={styles.infoText}>
-                  {' '}<a href={soilReport.uri} download={soilReport.name} style={styles.link}>Download</a>
+                  {' '}<a href={soilReport.uri} download={soilReport.name} style={styles.link}>(Download)</a>
                 </Text>
               )}
             </Text>
             <Text style={styles.infoText}>Crop Type: {cropType || 'Not selected'}</Text>
-            <Text style={styles.infoText}>Location Data: {locationData}</Text>
-            <Button title="Close" onPress={hideDetails} />
+            <Text style={styles.infoText}>Location Data :
+               {Platform.OS === 'web' && (
+                <a href={locationData} target="_blank" rel="noopener noreferrer">
+                  Open in Google Maps
+                </a>
+              )}
+            </Text>
+            <Button title="Close" onPress={hideDetails} style={styles.button} />
           </View>
-        </View>
+        </Animated.View>
       </Modal>
     </View>
   );
@@ -199,19 +231,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor:'white',
   },
   title: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 25,
+    fontWeight: 'light',
     marginBottom: 20,
   },
   label: {
-    marginTop: 20,
     fontSize: 18,
+    marginBottom: 10,
+    fontWeight: 'light',
   },
   picker: {
     height: 50,
-    width: 200,
+    width: 250,
     marginBottom: 20,
   },
   infoText: {
@@ -220,6 +254,8 @@ const styles = StyleSheet.create({
   },
   fileContainer: {
     marginVertical: 10,
+    width: '100%',
+    alignItems: 'center',
   },
   modalBackground: {
     flex: 1,
@@ -232,11 +268,12 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 10,
     width: '80%',
+    maxWidth:500,
     alignItems: 'center',
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 23,
+    fontWeight: 'light',
     marginBottom: 20,
   },
   closeButton: {
@@ -249,8 +286,23 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
   },
-  link: {
-    color: 'blue',
+  button: {
+    width: 200,
+    marginVertical: 10,
+    marginTop:30,
+  },
+  buttonMarginTop: {
+    marginTop: 10, // Adjust this value as needed
+  },
+  inputContainer: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 20,
+    width: '70%',
+    maxWidth: 400, // Optional: limit the maximum width if needed
+    alignItems: 'center', // Center-align contents inside the container
   },
 });
 
