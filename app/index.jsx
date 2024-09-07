@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, Button, StyleSheet, Modal, TouchableOpacity, Linking } from 'react-native';
-import DocumentPicker from 'react-native-document-picker';
-import RNFS from 'react-native-fs';
+import { View, Text, Button, StyleSheet, Modal, TouchableOpacity, Linking, Platform, Alert } from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import * as Location from 'expo-location';
 import { Picker } from '@react-native-picker/picker';
 
@@ -13,32 +12,35 @@ const App = () => {
 
   const uploadFileOnPressHandler = async () => {
     try {
-      const pickedFile = await DocumentPicker.pickSingle({
-        type: [DocumentPicker.types.allFiles],
+      const pickedFile = await DocumentPicker.getDocumentAsync({
+        type: '*/*',
       });
-  
+
       console.log('Picked File:', pickedFile);
-  
-      // Copy file to app's document directory
-      const filePath = `${RNFS.DocumentDirectoryPath}/${pickedFile.name}`;
-      await RNFS.copyFile(pickedFile.uri, filePath);
-  
-      // Store file details in state
-      setSoilReport({
-        ...pickedFile,
-        localUri: filePath, // Save the local file path
-      });
-    } catch (err) {
-      if (DocumentPicker.isCancel(err)) {
+
+      if (pickedFile.type === 'cancel') {
         console.log('User cancelled the file picker');
-      } else {
-        console.error('Error picking file:', err);
-        throw err;
+        return;
       }
+
+      if (pickedFile.assets && pickedFile.assets.length > 0) {
+        const file = pickedFile.assets[0]; // Access the first file in assets array
+
+        setSoilReport({
+          uri: file.uri,
+          name: file.name,
+          type: file.mimeType,
+        });
+      } else {
+        // Handle the case where no file is picked
+        Alert.alert('Error', 'No file was picked');
+      }
+    } catch (err) {
+      console.error('Error picking file:', err);
+      Alert.alert('Error', 'Error picking file');
     }
   };
-  
-  
+
   // Function to request location access
   const getLocation = async () => {
     try {
@@ -52,20 +54,21 @@ const App = () => {
       setLocation(location);
     } catch (error) {
       console.error('Error getting location:', error);
+      Alert.alert('Error', 'Error getting location');
     }
   };
 
   const showDetails = () => {
     setModalVisible(true);
   };
-  
+
   const hideDetails = () => {
     setModalVisible(false);
   };
-  
+
   const openFile = async () => {
-    if (soilReport && soilReport.localUri) {
-      await Linking.openURL(`file://${soilReport.localUri}`);
+    if (soilReport && soilReport.uri) {
+      await Linking.openURL(soilReport.uri); // Handle file URI for web
     } else {
       alert('No file available to open');
     }
@@ -86,7 +89,15 @@ const App = () => {
       <Button title="Pick Soil Report" onPress={uploadFileOnPressHandler} />
       {soilReport && (
         <View style={styles.fileContainer}>
-          <Text style={styles.infoText}>Selected file: {soilReport.name}</Text>
+          <Text style={styles.infoText}>
+            Selected file: {soilReport.name}
+            {Platform.OS === 'web' && soilReport.uri && (
+              <Text style={styles.infoText}>
+                {' '}
+                (<a href={soilReport.uri} download={soilReport.name} style={styles.link}>Download</a>)
+              </Text>
+            )}
+          </Text>
           <Button title="Remove File" onPress={() => setSoilReport(null)} />
         </View>
       )}
@@ -131,27 +142,35 @@ const App = () => {
 
       {/* Modal for displaying details */}
       <Modal
-      visible={modalVisible}
-      transparent={true}
-      animationType="slide"
-      onRequestClose={hideDetails}
-    >
-      <View style={styles.modalBackground}>
-        <View style={styles.modalContainer}>
-          <TouchableOpacity style={styles.closeButton} onPress={hideDetails}>
-            <Text style={styles.closeButtonText}>X</Text>
-          </TouchableOpacity>
-          <Text style={styles.modalTitle}>Details</Text>
-          <Text style={styles.infoText}>Selected file: {soilReport ? soilReport.name : 'No file selected'}</Text>
-          <Text style={styles.infoText}>Crop Type: {cropType || 'Not selected'}</Text>
-          {location && <Text style={styles.infoText}>Location: {location.coords.latitude}, {location.coords.longitude}</Text>}
-          {soilReport && soilReport.localUri && (
-            <Button title="Open File" onPress={openFile} />
-          )}
-          <Button title="Close" onPress={hideDetails} />
+        visible={modalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={hideDetails}
+      >
+        <View style={styles.modalBackground}>
+          <View style={styles.modalContainer}>
+            <TouchableOpacity style={styles.closeButton} onPress={hideDetails}>
+              <Text style={styles.closeButtonText}>X</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Details</Text>
+            <Text style={styles.infoText}>
+              Selected file: {soilReport ? soilReport.name : 'No file selected'}
+              {Platform.OS === 'web' && soilReport && soilReport.uri && (
+                <Text style={styles.infoText}>
+                  {' '}
+                  (<a href={soilReport.uri} download={soilReport.name} style={styles.link}>Download</a>)
+                </Text>
+              )}
+            </Text>
+            <Text style={styles.infoText}>Crop Type: {cropType || 'Not selected'}</Text>
+            {location && <Text style={styles.infoText}>Location: {location.coords.latitude}, {location.coords.longitude}</Text>}
+            {soilReport && (
+              <Button title="Open File" onPress={openFile} />
+            )}
+            <Button title="Close" onPress={hideDetails} />
+          </View>
         </View>
-      </View>
-    </Modal>
+      </Modal>
     </View>
   );
 };
@@ -214,6 +233,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: 'red',
+  },
+  link: {
+    color: 'blue',
+    textDecorationLine: 'underline',
   },
 });
 
