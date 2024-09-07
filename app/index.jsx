@@ -1,49 +1,74 @@
 import React, { useState } from 'react';
 import { View, Text, Button, StyleSheet, Modal, TouchableOpacity, Linking } from 'react-native';
-import * as DocumentPicker from 'expo-document-picker';
+import DocumentPicker from 'react-native-document-picker';
+import RNFS from 'react-native-fs';
 import * as Location from 'expo-location';
 import { Picker } from '@react-native-picker/picker';
 
-// Fertilizer Suggestion Screen Component
-const FertilizerSuggestionScreen = () => {
+const App = () => {
   const [soilReport, setSoilReport] = useState(null);
   const [cropType, setCropType] = useState('');
   const [location, setLocation] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
 
-  // Function to handle file picker
-  const handleFilePick = async () => {
-    let result = await DocumentPicker.getDocumentAsync({});
-    if (result.type === 'success') {
-      setSoilReport(result);
+  const uploadFileOnPressHandler = async () => {
+    try {
+      const pickedFile = await DocumentPicker.pickSingle({
+        type: [DocumentPicker.types.allFiles],
+      });
+  
+      console.log('Picked File:', pickedFile);
+  
+      // Copy file to app's document directory
+      const filePath = `${RNFS.DocumentDirectoryPath}/${pickedFile.name}`;
+      await RNFS.copyFile(pickedFile.uri, filePath);
+  
+      // Store file details in state
+      setSoilReport({
+        ...pickedFile,
+        localUri: filePath, // Save the local file path
+      });
+    } catch (err) {
+      if (DocumentPicker.isCancel(err)) {
+        console.log('User cancelled the file picker');
+      } else {
+        console.error('Error picking file:', err);
+        throw err;
+      }
     }
   };
-
-  // Function to handle file removal
-  const handleRemoveFile = () => {
-    setSoilReport(null);
-  };
-
+  
+  
   // Function to request location access
   const getLocation = async () => {
-    let { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      alert('Permission to access location was denied');
-      return;
-    }
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        alert('Permission to access location was denied');
+        return;
+      }
 
-    let location = await Location.getCurrentPositionAsync({});
-    setLocation(location);
+      let location = await Location.getCurrentPositionAsync({});
+      setLocation(location);
+    } catch (error) {
+      console.error('Error getting location:', error);
+    }
   };
 
-  // Function to show the modal
   const showDetails = () => {
     setModalVisible(true);
   };
-
-  // Function to hide the modal
+  
   const hideDetails = () => {
     setModalVisible(false);
+  };
+  
+  const openFile = async () => {
+    if (soilReport && soilReport.localUri) {
+      await Linking.openURL(`file://${soilReport.localUri}`);
+    } else {
+      alert('No file available to open');
+    }
   };
 
   // Function to clear all data
@@ -58,11 +83,11 @@ const FertilizerSuggestionScreen = () => {
       <Text style={styles.title}>Fertilizer Suggestion</Text>
 
       {/* Soil Report File Picker */}
-      <Button title="Pick Soil Report" onPress={handleFilePick} />
+      <Button title="Pick Soil Report" onPress={uploadFileOnPressHandler} />
       {soilReport && (
         <View style={styles.fileContainer}>
           <Text style={styles.infoText}>Selected file: {soilReport.name}</Text>
-          <Button title="Remove File" onPress={handleRemoveFile} />
+          <Button title="Remove File" onPress={() => setSoilReport(null)} />
         </View>
       )}
 
@@ -106,38 +131,31 @@ const FertilizerSuggestionScreen = () => {
 
       {/* Modal for displaying details */}
       <Modal
-        visible={modalVisible}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={hideDetails}
-      >
-        <View style={styles.modalBackground}>
-          <View style={styles.modalContainer}>
-            <TouchableOpacity style={styles.closeButton} onPress={hideDetails}>
-              <Text style={styles.closeButtonText}>X</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Details</Text>
-            <Text style={styles.infoText}>Selected file: {soilReport ? soilReport.name : 'No file selected'}</Text>
-            <Text style={styles.infoText}>Crop Type: {cropType || 'Not selected'}</Text>
-            {location && <Text style={styles.infoText}>Location: {location.coords.latitude}, {location.coords.longitude}</Text>}
-            <Button title="Close" onPress={hideDetails} />
-          </View>
+      visible={modalVisible}
+      transparent={true}
+      animationType="slide"
+      onRequestClose={hideDetails}
+    >
+      <View style={styles.modalBackground}>
+        <View style={styles.modalContainer}>
+          <TouchableOpacity style={styles.closeButton} onPress={hideDetails}>
+            <Text style={styles.closeButtonText}>X</Text>
+          </TouchableOpacity>
+          <Text style={styles.modalTitle}>Details</Text>
+          <Text style={styles.infoText}>Selected file: {soilReport ? soilReport.name : 'No file selected'}</Text>
+          <Text style={styles.infoText}>Crop Type: {cropType || 'Not selected'}</Text>
+          {location && <Text style={styles.infoText}>Location: {location.coords.latitude}, {location.coords.longitude}</Text>}
+          {soilReport && soilReport.localUri && (
+            <Button title="Open File" onPress={openFile} />
+          )}
+          <Button title="Close" onPress={hideDetails} />
         </View>
-      </Modal>
+      </View>
+    </Modal>
     </View>
   );
 };
 
-// Main App Component
-const App = () => {
-  return (
-    <View style={styles.container}>
-      <FertilizerSuggestionScreen />
-    </View>
-  );
-};
-
-// Styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
