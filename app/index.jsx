@@ -4,11 +4,15 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as Location from 'expo-location';
 import { Picker } from '@react-native-picker/picker';
 import Animated, { Easing, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
+import axios from 'axios';  // Import axios
+
+const LOCATIONIQ_API_KEY = 'pk.8f8b27e8d66526bef6dfbfa545de0abe'; // Replace with your LocationIQ API key
 
 const App = () => {
   const [soilReport, setSoilReport] = useState(null);
   const [cropType, setCropType] = useState('');
   const [locationData, setLocationData] = useState('');
+  const [convertedAddress, setConvertedAddress] = useState(''); // State to store the address
   const [errorMsg, setErrorMsg] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
 
@@ -41,10 +45,11 @@ const App = () => {
       if (Platform.OS === 'web') {
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(
-            (position) => {
+            async (position) => {
               const { latitude, longitude } = position.coords;
               const googleMapLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
               setLocationData(googleMapLink);
+              await fetchAddress(latitude, longitude);  // Fetch the address using lat, long
             },
             (error) => {
               setErrorMsg(error.message);
@@ -65,10 +70,22 @@ const App = () => {
         const { coords } = await Location.getCurrentPositionAsync({});
         const googleMapLink = `https://www.google.com/maps?q=${coords.latitude},${coords.longitude}`;
         setLocationData(googleMapLink);
+        await fetchAddress(coords.latitude, coords.longitude); // Fetch address
       }
     } catch (error) {
       setErrorMsg('Error getting location');
       setLocationData('Error fetching location');
+    }
+  };
+
+  const fetchAddress = async (lat, lon) => {
+    try {
+      const response = await axios.get(`https://us1.locationiq.com/v1/reverse.php?key=${LOCATIONIQ_API_KEY}&lat=${lat}&lon=${lon}&format=json`);
+      const address = response.data.display_name;
+      setConvertedAddress(address); // Save the converted address
+    } catch (error) {
+      setErrorMsg('Error converting location to address');
+      setConvertedAddress('Error converting location');
     }
   };
 
@@ -118,6 +135,7 @@ const App = () => {
     setSoilReport(null);
     setCropType('');
     setLocationData('');
+    setConvertedAddress('');
     setErrorMsg(null);
   };
 
@@ -176,24 +194,20 @@ const App = () => {
       <View style={styles.inputContainer}>
         <Text style={styles.label}>3. Location</Text>
         <Button title="Get Location" onPress={getLocation} style={styles.button} />
-        <Text style={styles.infoText} onPress={() => Linking.openURL(locationData)}>{locationData}</Text>
+        <Text style={styles.infoText} onPress={() => Linking.openURL(locationData)}>{convertedAddress}</Text>
         {errorMsg && (
           <Text style={styles.infoText}>{errorMsg}</Text>
         )}
       </View>
 
-
-
       <View style={styles.buttonContainer}>
-      {/* Get Details Button */}
         <View style={styles.buttonWrapper}>
-          <Button title="Get Details" onPress={showDetails} style={styles.button}/>
+          <Button title="Get Details" onPress={showDetails} style={styles.button} />
         </View>
         <View style={styles.buttonWrapper}>
           <Button title="Clear" onPress={clearData} />
         </View>
       </View>
-
 
       {/* Modal for displaying details */}
       <Modal
@@ -216,24 +230,19 @@ const App = () => {
                 </Text>
               )}
             </Text>
-            <Text style={styles.infoText}>Crop Type: {cropType || 'Not selected'}</Text>
-            <Text style={styles.infoText}>
-              Location Data : 
-              <Text 
-                style={styles.link} // Optionally add a custom style for the link
-                onPress={() => Linking.openURL(locationData)}
-              >
-                Open in Google Maps
-              </Text>
-            </Text>
+            <Text style={styles.infoText}>Crop Type: {cropType}</Text>
+            <Text style={styles.infoText}>Location Data: {locationData}</Text>
+            <Text style={styles.infoText}>Converted Address: {convertedAddress}</Text>
 
             <Button title="Confirm" onPress={hideDetails} style={styles.button} />
+            
           </View>
         </Animated.View>
       </Modal>
     </View>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: {
