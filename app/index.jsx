@@ -140,8 +140,8 @@ const App = () => {
             <Text style={styles.infoText}>
               Selected file: {soilReport.name}
               {Platform.OS === 'web' && soilReport.uri && (
-                <Text style={styles.infoText}>
-                  {' '}<a href={soilReport.uri} download={soilReport.name} style={styles.link}>Download</a>
+                <Text style={styles.infoText} onPress={() => Linking.openURL(soilReport.uri)}>
+                   (Download)
                 </Text>
               )}
             </Text>
@@ -176,17 +176,24 @@ const App = () => {
       <View style={styles.inputContainer}>
         <Text style={styles.label}>3. Location</Text>
         <Button title="Get Location" onPress={getLocation} style={styles.button} />
-        <Text style={styles.infoText}><a href={locationData} target="_blank" rel="noopener noreferrer">{locationData}</a></Text>
+        <Text style={styles.infoText} onPress={() => Linking.openURL(locationData)}>{locationData}</Text>
         {errorMsg && (
           <Text style={styles.infoText}>{errorMsg}</Text>
         )}
       </View>
 
-      {/* Get Details Button */}
-      <Button title="Get Details" onPress={showDetails} style={styles.button} />
 
-      {/* Clear Button */}
-      <Button title="Clear" onPress={clearData}/>
+
+      <View style={styles.buttonContainer}>
+      {/* Get Details Button */}
+        <View style={styles.buttonWrapper}>
+          <Button title="Get Details" onPress={showDetails} style={styles.button}/>
+        </View>
+        <View style={styles.buttonWrapper}>
+          <Button title="Clear" onPress={clearData} />
+        </View>
+      </View>
+
 
       {/* Modal for displaying details */}
       <Modal
@@ -198,26 +205,29 @@ const App = () => {
         <Animated.View style={[styles.modalBackground, animatedModalStyle]}>
           <View style={styles.modalContainer}>
             <TouchableOpacity style={styles.closeButton} onPress={hideDetails}>
-              <Text style={styles.closeButtonText}>X</Text>
+              <Text style={styles.closeButtonText}>x</Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Details</Text>
             <Text style={styles.infoText}>
               Selected file: {soilReport ? soilReport.name : 'No file selected'}
               {Platform.OS === 'web' && soilReport && soilReport.uri && (
-                <Text style={styles.infoText}>
-                  {' '}<a href={soilReport.uri} download={soilReport.name} style={styles.link}>(Download)</a>
+                <Text style={styles.infoText} onPress={() => Linking.openURL(soilReport.uri)}>
+                  (Download)
                 </Text>
               )}
             </Text>
             <Text style={styles.infoText}>Crop Type: {cropType || 'Not selected'}</Text>
-            <Text style={styles.infoText}>Location Data :
-               {Platform.OS === 'web' && (
-                <a href={locationData} target="_blank" rel="noopener noreferrer">
-                  Open in Google Maps
-                </a>
-              )}
+            <Text style={styles.infoText}>
+              Location Data : 
+              <Text 
+                style={styles.link} // Optionally add a custom style for the link
+                onPress={() => Linking.openURL(locationData)}
+              >
+                Open in Google Maps
+              </Text>
             </Text>
-            <Button title="Close" onPress={hideDetails} style={styles.button} />
+
+            <Button title="Confirm" onPress={hideDetails} style={styles.button} />
           </View>
         </Animated.View>
       </Modal>
@@ -283,8 +293,9 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   closeButtonText: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 30,
+    fontWeight: 'light',
+    top:-15,
   },
   button: {
     width: 200,
@@ -304,6 +315,15 @@ const styles = StyleSheet.create({
     maxWidth: 400, // Optional: limit the maximum width if needed
     alignItems: 'center', // Center-align contents inside the container
   },
+  buttonContainer: {
+    flexDirection: 'row', // Aligns children horizontally
+    justifyContent: 'space-between', // Space between buttons
+    marginTop: 20,
+  },
+  buttonWrapper: {
+    marginHorizontal: 10, // Adds space between the two buttons
+  },
+  link: {  color: 'blue'},
 });
 
 export default App;
