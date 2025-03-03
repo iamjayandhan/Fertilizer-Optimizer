@@ -6,7 +6,8 @@ import { Picker } from '@react-native-picker/picker';
 import Animated, { Easing, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import axios from 'axios';  // Import axios
 
-const LOCATIONIQ_API_KEY = 'pk.8f8b27e8d66526bef6dfbfa545de0abe'; // Replace with your LocationIQ API key
+const LOCATIONIQ_API_KEY = 'pk.8f8b27e8d66526bef6dfbfa545de0abe'; // convert lat,long into address
+const openAPI_KEY = '8f50e6fb7aae87096c29d1f67b6a7dff'; // open api key for weather parameters!
 
 const App = () => {
   const [soilReport, setSoilReport] = useState(null);
@@ -15,6 +16,9 @@ const App = () => {
   const [convertedAddress, setConvertedAddress] = useState(''); // State to store the address
   const [errorMsg, setErrorMsg] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
+
+  //store weather parameters!
+  const [weather, setWeather] = useState(null);
 
   const translateY = useSharedValue(1000); // Start from below the screen
 
@@ -40,6 +44,47 @@ const App = () => {
     getLocation();
   }, []);
 
+  const fetchWeatherData = async (latitude, longitude) => {
+    try {
+        const apiKey = '8f50e6fb7aae87096c29d1f67b6a7dff';
+        console.log("Fetching weather data for:", { latitude, longitude }); // Debugging: Check coordinates
+
+        const response = await fetch(
+            `https://api.openweathermap.org/data/2.5/weather?lat=${latitude}&lon=${longitude}&appid=${apiKey}&units=metric`
+        );
+
+        console.log("API Response Status:", response.status); // Debugging: Check response status
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log("API Response Data:", data); // Debugging: Print full API response
+
+        if (data.main) {
+            console.log("Extracted Weather Data:", {
+                temperature: data.main.temp,
+                pressure: data.main.pressure,
+                humidity: data.main.humidity,
+            }); // Debugging: Check extracted values before setting state
+
+            setWeather({
+                temperature: data.main.temp,
+                pressure: data.main.pressure,
+                humidity: data.main.humidity,
+            });
+        } else {
+            console.error("Error: 'main' property missing in API response");
+        }
+    } catch (error) {
+        console.error("Error fetching weather data:", error);
+    }
+};
+
+
+
+  //lat,long into address
   const getLocation = async () => {
     try {
       if (Platform.OS === 'web') {
@@ -49,6 +94,7 @@ const App = () => {
               const { latitude, longitude } = position.coords;
               const googleMapLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
               setLocationData(googleMapLink);
+              fetchWeatherData(latitude, longitude);
               await fetchAddress(latitude, longitude);  // Fetch the address using lat, long
             },
             (error) => {
@@ -70,6 +116,10 @@ const App = () => {
         const { coords } = await Location.getCurrentPositionAsync({});
         const googleMapLink = `https://www.google.com/maps?q=${coords.latitude},${coords.longitude}`;
         setLocationData(googleMapLink);
+
+        //get weather parameters
+        fetchWeatherData(coords.latitude, coords.longitude);
+
         await fetchAddress(coords.latitude, coords.longitude); // Fetch address
       }
     } catch (error) {
@@ -82,7 +132,7 @@ const App = () => {
     try {
       const response = await axios.get(`https://us1.locationiq.com/v1/reverse.php?key=${LOCATIONIQ_API_KEY}&lat=${lat}&lon=${lon}&format=json`);
       const address = response.data.display_name;
-      setConvertedAddress(address); // Save the converted address
+      setConvertedAddress(address); 
     } catch (error) {
       setErrorMsg('Error converting location to address');
       setConvertedAddress('Error converting location');
@@ -213,7 +263,7 @@ const App = () => {
       <Modal
         visible={modalVisible}
         transparent={true}
-        animationType="none" // Disable default animation
+        animationType="none" 
         onRequestClose={hideDetails}
       >
         <Animated.View style={[styles.modalBackground, animatedModalStyle]}>
@@ -232,6 +282,13 @@ const App = () => {
             </Text>
             <Text style={styles.infoText}>Crop Type: {cropType}</Text>
             <Text style={styles.infoText}>Location Data: {locationData}</Text>
+
+            <Text style={styles.infoText}>Weather parameters: {"\n"}
+            <Text>Temperature: {weather.temperature}°C{"\n"}</Text>
+            <Text>Pressure: {weather.pressure} hPa{"\n"}</Text>
+            <Text>Humidity: {weather.humidity}%</Text>
+            </Text>
+
             <Text style={styles.infoText}>Converted Address: {convertedAddress}</Text>
 
             <Button title="Confirm" onPress={hideDetails} style={styles.button} />
@@ -312,7 +369,7 @@ const styles = StyleSheet.create({
     marginTop:30,
   },
   buttonMarginTop: {
-    marginTop: 10, // Adjust this value as needed
+    marginTop: 10, 
   },
   inputContainer: {
     borderWidth: 1,
@@ -321,16 +378,16 @@ const styles = StyleSheet.create({
     padding: 15,
     marginBottom: 20,
     width: '70%',
-    maxWidth: 400, // Optional: limit the maximum width if needed
-    alignItems: 'center', // Center-align contents inside the container
+    maxWidth: 400,
+    alignItems: 'center', 
   },
   buttonContainer: {
-    flexDirection: 'row', // Aligns children horizontally
-    justifyContent: 'space-between', // Space between buttons
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     marginTop: 20,
   },
   buttonWrapper: {
-    marginHorizontal: 10, // Adds space between the two buttons
+    marginHorizontal: 10,
   },
   link: {  color: 'blue'},
 });
